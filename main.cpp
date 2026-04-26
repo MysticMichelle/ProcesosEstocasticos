@@ -40,6 +40,13 @@ double calcularEsperanza(int m,
                          double pi[MAX_ESTADOS],
                          double costos[MAX_ESTADOS][MAX_DECISIONES]);
 
+void imprimirMatriz(const char* titulo, int n,
+                    double M[MAX_ESTADOS][MAX_ESTADOS]);
+
+void imprimirSistemaEstacionario(int m,
+                                 double P[MAX_ESTADOS][MAX_ESTADOS],
+                                 double pi[MAX_ESTADOS]);
+
 // ============================================================
 //  Portada
 // ============================================================
@@ -239,6 +246,66 @@ int resolverSistemaEstacionario(int m,
 }
 
 // ============================================================
+//  Imprimir una matriz n x n con etiqueta
+// ============================================================
+void imprimirMatriz(const char* titulo, int n,
+                    double M[MAX_ESTADOS][MAX_ESTADOS]) {
+    printf("  %s\n", titulo);
+    printf("       ");
+    for (int j = 0; j < n; j++) printf("   j=%-4d", j);
+    printf("\n");
+    for (int i = 0; i < n; i++) {
+        printf("  i=%d [ ", i);
+        for (int j = 0; j < n; j++)
+            printf("%8.4f ", M[i][j]);
+        printf("]\n");
+    }
+    printf("\n");
+}
+
+// ============================================================
+//  Imprimir el sistema pi*P = pi y su solucion
+//  Muestra la matriz aumentada (P^T - I | 0) con la
+//  restriccion sum=1 en el ultimo renglon, y luego el
+//  vector pi resultante en formato columna.
+// ============================================================
+void imprimirSistemaEstacionario(int m,
+                                 double P[MAX_ESTADOS][MAX_ESTADOS],
+                                 double pi[MAX_ESTADOS]) {
+    int n = m + 1;
+
+    printf("  Sistema de ecuaciones estacionarias (pi * P = pi):\n");
+    printf("  Ecuaciones (P^T - I) * pi = 0  +  sum(pi) = 1\n");
+    printf("  %-30s | RHS\n", "Coeficientes");
+    printf("  ");
+    for (int j = 0; j < n; j++) printf("  pi_%d    ", j);
+    printf("  | RHS\n");
+    printf("  ");
+    for (int j = 0; j <= n; j++) printf("---------");
+    printf("\n");
+
+    // Renglones del sistema (P^T - I)
+    for (int i = 0; i < n - 1; i++) {
+        printf("  ");
+        for (int j = 0; j < n; j++) {
+            double coef = P[j][i] - (i == j ? 1.0 : 0.0);
+            printf("%8.4f ", coef);
+        }
+        printf("  |  0\n");
+    }
+    // Ultimo renglon: sum = 1
+    printf("  ");
+    for (int j = 0; j < n; j++) printf("%8.4f ", 1.0);
+    printf("  |  1\n\n");
+
+    // Solucion
+    printf("  Solucion — vector estacionario pi:\n");
+    for (int i = 0; i < n; i++)
+        printf("    pi_%d = %10.6f\n", i, pi[i]);
+    printf("\n");
+}
+
+// ============================================================
 //  E(C) = sum_i  pi[i] * C[i][ decision_i ]
 // ============================================================
 double calcularEsperanza(int m,
@@ -354,20 +421,19 @@ void algoritmo1() {
             continue;
         }
 
-        // Construir matriz de politica y resolver sistema
+        // Construir matriz de politica y mostrarla
         construirMatrizPolitica(m, politicas[n], Pdec, Ppol);
+        imprimirMatriz("Matriz de transicion de la politica:", numEstados, Ppol);
 
+        // Resolver sistema estacionario
         if (!resolverSistemaEstacionario(m, Ppol, pi)) {
             printf("  Sistema singular => politica omitida.\n");
             ec[n] = (objetivo == 1) ? 1e18 : -1e18;
             continue;
         }
 
-        // Mostrar vector pi
-        printf("  Vector pi: (");
-        for (int i = 0; i < numEstados; i++)
-            printf("%.6f%s", pi[i], i < numEstados - 1 ? ", " : "");
-        printf(")\n");
+        // Mostrar sistema y vector pi
+        imprimirSistemaEstacionario(m, Ppol, pi);
 
         // Calcular E(C)
         ec[n] = calcularEsperanza(m, politicas[n], pi, costos);

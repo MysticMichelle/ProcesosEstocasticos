@@ -88,6 +88,7 @@ void   menuPrincipal();
 void   algoritmo1();
 void   algoritmo2();
 void   algoritmo3();
+void   algoritmo4();
 double leerValor();
 void   leerCostos(int m, int k, double costos[MAX_ESTADOS][MAX_DECISIONES], int aplicable[MAX_DECISIONES][MAX_ESTADOS]);
 void   leerMatrizTransicion(int decision, int m, double P[MAX_ESTADOS][MAX_ESTADOS], int aplicable[MAX_ESTADOS]);
@@ -127,7 +128,12 @@ void menuPrincipal() {
                    g_m + 1, g_k);
         else
             printf("3. Mejoramiento de Politicas  [ejecute opcion 1 primero para cargar datos]\n");
-        printf("4. Salir\n");
+        if (g_capturado)
+            printf("4. Mejoramiento de Politicas con Descuento  [datos cargados: %d estados, %d decisiones]\n",
+                   g_m + 1, g_k);
+        else
+            printf("4. Mejoramiento de Politicas con Descuento  [ejecute opcion 1 primero para cargar datos]\n");
+        printf("5. Salir\n");
         printf("=====================================\n");
         printf("Selecciona una opcion: ");
         scanf("%d", &x);
@@ -137,7 +143,8 @@ void menuPrincipal() {
             case 1: algoritmo1(); break;
             case 2: algoritmo2(); break;
             case 3: algoritmo3(); break;
-            case 4:
+            case 4: algoritmo4(); break;
+            case 5:
                 printf("Adios, vuelva pronto.\n");
                 repetir = 0;
                 break;
@@ -566,45 +573,14 @@ static void imprimirFraccion(double val, int forzar_decimal) {
     }
 }
 
-/* ============================================================
-   resolverPaso1
-   
-   Ecuacion de Bellman para la politica Rn con normalizacion V_m = 0:
-   
-       g(Rn) + V_i - sum_{j=0}^{m} P_{ij}(k) * V_j = C_{ik}
-       para cada i = 0, 1, ..., m.
-   
-   Reordenada para el sistema Ax = b:
-   
-       1*g + (delta_{ij} - P_{ij}(k)) * V_j = C_{ik}
-   
-   Variables: x[0]=g, x[1]=V_0, ..., x[m]=V_{m-1}  (n = m+1 incognitas)
-   Normalizacion: V_m = 0, sustituida directamente en el RHS.
-   Ecuaciones: n filas (i = 0 .. m).
-   Las n ecuaciones Bellman con V_m=0 forman un sistema n x n no singular.
-   ============================================================ */
 static int resolverPaso1(int m, int politica[MAX_ESTADOS],
                          double Pdec[MAX_DECISIONES][MAX_ESTADOS][MAX_ESTADOS],
                          double costos[MAX_ESTADOS][MAX_DECISIONES],
                          double *gRn, double V[MAX_ESTADOS]) {
-    int n = m + 1;   /* numero de estados = numero de incognitas {g, V_0..V_{m-1}} */
+    int n = m + 1;
     static double A[MAX_ESTADOS + 1][MAX_ESTADOS + 2];
     memset(A, 0, sizeof(A));
 
-    /*
-     * Para cada estado i (fila i del sistema):
-     *   A[i][0]     = 1                          (coef de g)
-     *   A[i][1+j]   = delta_{ij} - P_{ij}(k)    (coef de V_j, para j=0..m-1)
-     *   RHS A[i][n] = C_{ik}                     (V_m=0 absorbe el termino P_{im}*V_m=0)
-     *
-     * Para i < m:
-     *   - el termino con V_i en la ec. original es +V_i, luego coef = delta_{ij}-P_{ij}
-     *     que para j=i vale 1-P_{ii}, y para j!=i vale -P_{ij}.
-     * Para i = m:
-     *   - V_m=0, luego el termino +V_m desaparece (delta_{mj}=0 para j<m),
-     *     quedando coef de V_j = -P_{mj} para j=0..m-1.
-     *   Esta formula queda cubierta por la expresion general (delta_{mj}=0).
-     */
     for (int i = 0; i < n; i++) {
         int k = politica[i];
         A[i][0] = 1.0;
@@ -613,7 +589,6 @@ static int resolverPaso1(int m, int politica[MAX_ESTADOS],
         A[i][n] = costos[i][k];
     }
 
-    /* Gauss-Jordan con pivoteo parcial sobre sistema n x n */
     for (int col = 0; col < n; col++) {
         int pivot = -1; double best = 0.0;
         for (int row = col; row < n; row++)
@@ -671,7 +646,6 @@ void algoritmo3() {
     int iteracion = 1;
 
     while (1) {
-        /* ---- Paso 1: Determinacion del valor ---- */
         printf("\n========================================\n");
         printf("  ITERACION %d\n", iteracion);
         printf("========================================\n");
@@ -681,9 +655,6 @@ void algoritmo3() {
             printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
         printf(")\n\n");
 
-        /* Mostrar sistema de ecuaciones:
-           Forma: g(Rn) + V_i - sum_j P_{ij}(k)*V_j = C_{ik}
-           Coeficiente de V_j: delta_{ij} - P_{ij}(k) */
         printf("  Sistema (con V_%d = 0):\n\n", g_m);
         for (int i = 0; i < numEstados; i++) {
             int k = politica[i];
@@ -696,7 +667,6 @@ void algoritmo3() {
                 imprimirFraccion(fabs(coef), 0);
                 printf("*V_%d", j);
             }
-            /* Termino del estado m: coef = delta_{im} - P_{im} pero V_m=0 */
             {
                 double coef_m = (i == g_m ? 1.0 : 0.0) - g_Pdec[k][i][g_m];
                 if (fabs(coef_m) > 1e-12)
@@ -726,7 +696,6 @@ void algoritmo3() {
             printf("\n");
         }
 
-        /* ---- Paso 2: Mejoramiento de la Politica ---- */
         printf("\n  --- PASO 2: Mejoramiento de la Politica ---\n");
         printf("  Para cada estado i, minimizar:  C_{ik} + sum_j P_{ij}(k)*V_j - V_i\n\n");
 
@@ -766,7 +735,6 @@ void algoritmo3() {
             printf("%d%s", nuevaPolitica[i], i < numEstados - 1 ? "," : "");
         printf(")\n");
 
-        /* ---- Prueba de optimalidad ---- */
         for (int i = 0; i < numEstados; i++)
             cambio += (nuevaPolitica[i] != politica[i]);
 
@@ -792,12 +760,282 @@ void algoritmo3() {
             break;
         }
 
-        /* Continuar con nueva politica */
         for (int i = 0; i < numEstados; i++)
             politica[i] = nuevaPolitica[i];
         iteracion++;
 
         printf("\n  [La politica cambio, continuando iteracion %d...]\n", iteracion);
+        printf("  Presione Enter para continuar...\n");
+        getchar();
+    }
+}
+
+/* ============================================================
+   ALGORITMO 4: Mejoramiento de Politicas con Descuento
+   (Criterio del valor descontado - seccion 4.3.2)
+
+   Factor de descuento: alpha = 1 / (1 + epsilon)
+   donde epsilon es la tasa de interes.
+
+   Paso 0: Elegir una politica arbitraria inicial R1.
+
+   Paso 1: Determinacion del valor (ecuacion de Bellman con descuento):
+       V_i(Rn) = C_ik + alpha * sum_{j=0}^{m} P_ij(k) * V_j(Rn)
+       para i = 0, 1, ..., m
+       donde k = decision asignada al estado i en la politica Rn.
+
+   Reordenando el sistema lineal:
+       V_i - alpha * sum_j P_ij(k) * V_j = C_ik
+       => (I - alpha * P(Rn)) * V = C(Rn)
+
+   Paso 2: Mejoramiento de la politica:
+       Para cada estado i, encontrar k* que minimice:
+           C_ik + alpha * sum_j P_ij(k) * V_j(Rn)
+
+   Prueba de optimalidad: Si Rn+1 = Rn => Rn es optima.
+   ============================================================ */
+
+/* Resuelve el sistema (I - alpha*P(Rn)) * V = C(Rn) por Gauss-Jordan */
+static int resolverSistemaDescuento(int m, int politica[MAX_ESTADOS],
+                                    double Pdec[MAX_DECISIONES][MAX_ESTADOS][MAX_ESTADOS],
+                                    double costos[MAX_ESTADOS][MAX_DECISIONES],
+                                    double alpha,
+                                    double V[MAX_ESTADOS]) {
+    int n = m + 1;
+    /* Matriz aumentada [A | b] de tamano n x (n+1) */
+    static double A[MAX_ESTADOS][MAX_ESTADOS + 1];
+    memset(A, 0, sizeof(A));
+
+    /*
+     * Ecuacion i: V_i - alpha * sum_j P_ij(k) * V_j = C_ik
+     * Coeficiente de V_j en la fila i: delta_ij - alpha * P_ij(k)
+     * RHS: C_ik
+     */
+    for (int i = 0; i < n; i++) {
+        int k = politica[i];
+        for (int j = 0; j < n; j++)
+            A[i][j] = (i == j ? 1.0 : 0.0) - alpha * Pdec[k][i][j];
+        A[i][n] = costos[i][k];
+    }
+
+    /* Gauss-Jordan con pivoteo parcial */
+    for (int col = 0; col < n; col++) {
+        int pivot = -1; double best = 0.0;
+        for (int row = col; row < n; row++)
+            if (fabs(A[row][col]) > best) { best = fabs(A[row][col]); pivot = row; }
+        if (pivot < 0 || best < 1e-12) return 0;
+        if (pivot != col)
+            for (int j = 0; j <= n; j++) {
+                double t = A[col][j]; A[col][j] = A[pivot][j]; A[pivot][j] = t;
+            }
+        double pv = A[col][col];
+        for (int j = 0; j <= n; j++) A[col][j] /= pv;
+        for (int row = 0; row < n; row++) {
+            if (row == col) continue;
+            double f = A[row][col];
+            for (int j = 0; j <= n; j++) A[row][j] -= f * A[col][j];
+        }
+    }
+
+    for (int i = 0; i < n; i++) V[i] = A[i][n];
+    return 1;
+}
+
+void algoritmo4() {
+    system("cls");
+    printf("===== MEJORAMIENTO DE POLITICAS CON DESCUENTO =====\n");
+    printf("       (Criterio del Valor Descontado - Sec. 4.3.2)\n");
+
+    if (!g_capturado) {
+        printf("\n[!] No hay datos cargados.\n");
+        printf("    Ejecute primero la Enumeracion Exhaustiva (opcion 1)\n");
+        printf("    para ingresar las matrices de transicion y costos.\n");
+        return;
+    }
+
+    int numEstados = g_m + 1;
+
+    /* ---- Leer factor de descuento ---- */
+    printf("\n============================================================\n");
+    printf("  FACTOR DE DESCUENTO\n");
+    printf("  alpha = 1 / (1 + epsilon)   donde epsilon = tasa de interes\n");
+    printf("  Ejemplo: si epsilon = 0.10 (10%%)  =>  alpha = 1/1.10 = 0.9091\n");
+    printf("============================================================\n");
+
+    double alpha;
+    int modo;
+    printf("\nDesea ingresar (1) epsilon (tasa de interes) o (2) alpha directamente?: ");
+    scanf("%d", &modo); getchar();
+
+    if (modo == 1) {
+        double epsilon;
+        printf("Ingrese epsilon (tasa de interes, ej. 0.10 para 10%%): ");
+        epsilon = leerValor();
+        if (epsilon <= -1.0) {
+            printf("[!] Tasa de interes invalida (debe ser > -1). Se usara epsilon=0.\n");
+            epsilon = 0.0;
+        }
+        alpha = 1.0 / (1.0 + epsilon);
+        printf("=> alpha = 1 / (1 + %.6f) = %.8f\n", epsilon, alpha);
+    } else {
+        printf("Ingrese alpha directamente (0 < alpha < 1, ej. 9/10): ");
+        alpha = leerValor();
+        if (alpha <= 0.0 || alpha >= 1.0) {
+            printf("[!] alpha debe estar en (0,1). Se usara alpha=0.9.\n");
+            alpha = 0.9;
+        }
+        printf("=> alpha = %.8f\n", alpha);
+    }
+
+    /* ---- Paso 0: Politica inicial ---- */
+    printf("\n========================================\n");
+    printf("  PASO 0: Politica de arranque R1\n");
+    printf("========================================\n");
+    printf("  Ingrese la politica inicial R1 (vector de %d decisiones):\n", numEstados);
+
+    int politica[MAX_ESTADOS];
+    for (int i = 0; i < numEstados; i++) {
+        int d;
+        do {
+            printf("    Estado %d -> decision (1..%d): ", i, g_k);
+            scanf("%d", &d); getchar();
+            if (d < 1 || d > g_k || !g_aplicable[d][i])
+                printf("    [!] Decision %d no valida para estado %d. Intente de nuevo.\n", d, i);
+        } while (d < 1 || d > g_k || !g_aplicable[d][i]);
+        politica[i] = d;
+    }
+
+    int iteracion = 1;
+
+    while (1) {
+        /* ---- Paso 1: Determinacion del valor con descuento ---- */
+        printf("\n========================================\n");
+        printf("  ITERACION %d\n", iteracion);
+        printf("========================================\n");
+        printf("\n  --- PASO 1: Determinacion del Valor (con descuento alpha=%.6f) ---\n", alpha);
+        printf("  Politica R%d: (", iteracion);
+        for (int i = 0; i < numEstados; i++)
+            printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
+        printf(")\n\n");
+
+        /* Mostrar el sistema de ecuaciones de Bellman con descuento */
+        printf("  Ecuacion de Bellman con descuento:\n");
+        printf("  V_i(R%d) = C_ik + alpha * sum_j P_ij(k) * V_j(R%d)\n\n", iteracion, iteracion);
+        printf("  Sistema lineal  (I - alpha*P(R%d)) * V = C(R%d):\n\n", iteracion, iteracion);
+
+        for (int i = 0; i < numEstados; i++) {
+            int k = politica[i];
+            printf("    i=%d [k=%d]:  ", i, k);
+            int primero_term = 1;
+            for (int j = 0; j < numEstados; j++) {
+                double coef = (i == j ? 1.0 : 0.0) - alpha * g_Pdec[k][i][j];
+                if (fabs(coef) < 1e-12) continue;
+                if (!primero_term) {
+                    if (coef > 0) printf(" + ");
+                    else          printf(" - ");
+                    imprimirFraccion(fabs(coef), 0);
+                } else {
+                    if (coef < 0) printf("-");
+                    imprimirFraccion(fabs(coef), 0);
+                    primero_term = 0;
+                }
+                printf("*V_%d", j);
+            }
+            printf("  =  ");
+            imprimirFraccion(g_costos[i][k], 0);
+            printf("  [C_%d%d]\n", i, k);
+        }
+
+        /* Resolver el sistema */
+        double V[MAX_ESTADOS];
+        if (!resolverSistemaDescuento(g_m, politica, g_Pdec, g_costos, alpha, V)) {
+            printf("\n  [!] Sistema singular. No se puede continuar.\n");
+            break;
+        }
+
+        printf("\n  Valores V_i(R%d) resueltos:\n", iteracion);
+        for (int i = 0; i < numEstados; i++) {
+            printf("    V_%d = ", i);
+            imprimirFraccion(V[i], 0);
+            printf("\n");
+        }
+
+        /* ---- Paso 2: Mejoramiento de la politica ---- */
+        printf("\n  --- PASO 2: Mejoramiento de la Politica ---\n");
+        printf("  Para cada estado i, encontrar k que minimice:\n");
+        printf("      C_ik + alpha * sum_j P_ij(k) * V_j(R%d)\n\n", iteracion);
+
+        int nuevaPolitica[MAX_ESTADOS];
+        int cambio = 0;
+
+        for (int i = 0; i < numEstados; i++) {
+            printf("  Estado i=%d:\n", i);
+            double mejorVal = 1e18;
+            int    mejorK   = -1;
+
+            for (int k = 1; k <= g_k; k++) {
+                if (!g_aplicable[k][i]) continue;
+
+                /* Calcular C_ik + alpha * sum_j P_ij(k) * V_j */
+                double val = g_costos[i][k];
+                for (int j = 0; j < numEstados; j++)
+                    val += alpha * g_Pdec[k][i][j] * V[j];
+
+                printf("    k=%d:  C[%d][%d] + alpha*sum_j P[%d][j](k=%d)*V_j = %.6f + %.6f = ",
+                       k, i, k, i, k, g_costos[i][k], val - g_costos[i][k]);
+                imprimirFraccion(val, 0);
+
+                if (val < mejorVal - 1e-9) {
+                    mejorVal = val;
+                    mejorK   = k;
+                    printf("  <-- minimo");
+                }
+                printf("\n");
+            }
+            nuevaPolitica[i] = mejorK;
+            printf("    => d_%d(R%d) = k=%d  [V_i nuevo = ", i, iteracion + 1, mejorK);
+            imprimirFraccion(mejorVal, 0);
+            printf("]\n");
+        }
+
+        printf("\n  Nueva politica R%d: (", iteracion + 1);
+        for (int i = 0; i < numEstados; i++)
+            printf("%d%s", nuevaPolitica[i], i < numEstados - 1 ? "," : "");
+        printf(")\n");
+
+        /* ---- Prueba de optimalidad ---- */
+        for (int i = 0; i < numEstados; i++)
+            cambio += (nuevaPolitica[i] != politica[i]);
+
+        if (cambio == 0) {
+            printf("\n  ========================================\n");
+            printf("  PRUEBA DE OPTIMALIDAD: R%d = R%d\n", iteracion + 1, iteracion);
+            printf("  => R%d == R%d  =>  Se encontro la politica optima.\n",
+                   iteracion + 1, iteracion);
+            printf("  ========================================\n");
+            printf("\n  RESUMEN FINAL:\n");
+            printf("    alpha  = %.8f\n", alpha);
+            printf("    Politica optima: R*(");
+            for (int i = 0; i < numEstados; i++)
+                printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
+            printf(")\n\n");
+            printf("    Valores descontados optimos V_i(R*):\n");
+            for (int i = 0; i < numEstados; i++) {
+                printf("      V_%d = ", i);
+                imprimirFraccion(V[i], 0);
+                printf("\n");
+            }
+            printf("\n  Interpretacion: V_i representa el valor presente total\n");
+            printf("  del costo esperado partiendo del estado i bajo la politica optima.\n");
+            break;
+        }
+
+        /* Continuar con la nueva politica */
+        for (int i = 0; i < numEstados; i++)
+            politica[i] = nuevaPolitica[i];
+        iteracion++;
+
+        printf("\n  [La politica cambio, continuando con iteracion %d...]\n", iteracion);
         printf("  Presione Enter para continuar...\n");
         getchar();
     }

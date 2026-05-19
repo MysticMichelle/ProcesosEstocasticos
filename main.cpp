@@ -89,6 +89,7 @@ void   algoritmo1();
 void   algoritmo2();
 void   algoritmo3();
 void   algoritmo4();
+void   algoritmo5();
 double leerValor();
 void   leerCostos(int m, int k, double costos[MAX_ESTADOS][MAX_DECISIONES], int aplicable[MAX_DECISIONES][MAX_ESTADOS]);
 void   leerMatrizTransicion(int decision, int m, double P[MAX_ESTADOS][MAX_ESTADOS], int aplicable[MAX_ESTADOS]);
@@ -133,7 +134,12 @@ void menuPrincipal() {
                    g_m + 1, g_k);
         else
             printf("4. Mejoramiento de Politicas con Descuento  [ejecute opcion 1 primero para cargar datos]\n");
-        printf("5. Salir\n");
+        if (g_capturado)
+            printf("5. Aproximaciones Sucesivas  [datos cargados: %d estados, %d decisiones]\n",
+                   g_m + 1, g_k);
+        else
+            printf("5. Aproximaciones Sucesivas  [ejecute opcion 1 primero para cargar datos]\n");
+        printf("6. Salir\n");
         printf("=====================================\n");
         printf("Selecciona una opcion: ");
         scanf("%d", &x);
@@ -144,7 +150,8 @@ void menuPrincipal() {
             case 2: algoritmo2(); break;
             case 3: algoritmo3(); break;
             case 4: algoritmo4(); break;
-            case 5:
+            case 5: algoritmo5(); break;
+            case 6:
                 printf("Adios, vuelva pronto.\n");
                 repetir = 0;
                 break;
@@ -772,7 +779,6 @@ void algoritmo3() {
 
 /* ============================================================
    ALGORITMO 4: Mejoramiento de Politicas con Descuento
-   (Criterio del valor descontado - seccion 4.3.2)
    ============================================================ */
 
 static int resolverSistemaDescuento(int m, int politica[MAX_ESTADOS],
@@ -858,7 +864,6 @@ void algoritmo4() {
         printf("=> alpha = %.8f\n", alpha);
     }
 
-    /* ---- Paso 0: Politica inicial ---- */
     printf("\n========================================\n");
     printf("  PASO 0: Politica de arranque R1\n");
     printf("========================================\n");
@@ -879,7 +884,6 @@ void algoritmo4() {
     int iteracion = 1;
 
     while (1) {
-        /* ---- Paso 1: Determinacion del valor con descuento ---- */
         printf("\n========================================\n");
         printf("  ITERACION %d\n", iteracion);
         printf("========================================\n");
@@ -891,7 +895,6 @@ void algoritmo4() {
             printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
         printf(")\n\n");
 
-        /* Mostrar ecuacion de Bellman expandida por terminos */
         printf("  Ecuacion de Bellman con descuento:\n");
         printf("  V_i(R%d) = C_ik + alpha * { sum_j P_ij(k) * V_j(R%d) }\n\n", iteracion, iteracion);
         printf("  Sistema lineal  (I - alpha*P(R%d)) * V = C(R%d):\n\n", iteracion, iteracion);
@@ -899,7 +902,6 @@ void algoritmo4() {
         for (int i = 0; i < numEstados; i++) {
             int k = politica[i];
 
-            /* --- Mostrar la ecuacion de Bellman expandida (forma original) --- */
             printf("    i=%d [k=%d]:  V_%d = ", i, k, i);
             imprimirFraccion(g_costos[i][k], 0);
             printf(" + ");
@@ -911,7 +913,6 @@ void algoritmo4() {
             }
             printf(" }\n");
 
-            /* Sustituir los valores de P conocidos */
             printf("          V_%d = ", i);
             imprimirFraccion(g_costos[i][k], 0);
             printf(" + ");
@@ -928,7 +929,6 @@ void algoritmo4() {
             }
             printf(" }\n");
 
-            /* Mostrar la ecuacion reordenada (forma del sistema lineal) */
             printf("          ");
             int primero_eq = 1;
             for (int j = 0; j < numEstados; j++) {
@@ -950,7 +950,6 @@ void algoritmo4() {
             printf("   [Ec. %d]\n\n", i + 1);
         }
 
-        /* Resolver el sistema */
         double V[MAX_ESTADOS];
         if (!resolverSistemaDescuento(g_m, politica, g_Pdec, g_costos, alpha, V)) {
             printf("\n  [!] Sistema singular. No se puede continuar.\n");
@@ -964,7 +963,6 @@ void algoritmo4() {
             printf("\n");
         }
 
-        /* ---- Paso 2: Mejoramiento de la politica ---- */
         printf("\n  --- PASO 2: Mejoramiento de la Politica ---\n");
         printf("  Para cada estado i, encontrar k que minimice:\n");
         printf("      C_ik + alpha * sum_j P_ij(k) * V_j(R%d)\n\n", iteracion);
@@ -973,12 +971,10 @@ void algoritmo4() {
         int cambio = 0;
 
         for (int i = 0; i < numEstados; i++) {
-            /* Contar decisiones aplicables */
             int num_aplic = 0;
             for (int k = 1; k <= g_k; k++) if (g_aplicable[k][i]) num_aplic++;
 
             if (num_aplic == 1) {
-                /* Decision unica: mostrar como en el PDF */
                 for (int k = 1; k <= g_k; k++) {
                     if (!g_aplicable[k][i]) continue;
                     double val = g_costos[i][k];
@@ -998,7 +994,6 @@ void algoritmo4() {
                 for (int k = 1; k <= g_k; k++) {
                     if (!g_aplicable[k][i]) continue;
 
-                    /* Mostrar la forma expandida: C_ik + alpha*{suma} */
                     printf("    k=%d:  V_%d = C_%d%d + ", k, i, i, k);
                     imprimirFraccion(alpha, 0);
                     printf(" * { ");
@@ -1016,7 +1011,6 @@ void algoritmo4() {
                     }
                     printf(" }\n");
 
-                    /* Calcular el valor numerico */
                     double val = g_costos[i][k];
                     for (int j = 0; j < numEstados; j++)
                         val += alpha * g_Pdec[k][i][j] * V[j];
@@ -1046,7 +1040,6 @@ void algoritmo4() {
             printf("%d%s", nuevaPolitica[i], i < numEstados - 1 ? "," : "");
         printf(")\n");
 
-        /* ---- Prueba de optimalidad ---- */
         for (int i = 0; i < numEstados; i++)
             cambio += (nuevaPolitica[i] != politica[i]);
 
@@ -1083,6 +1076,253 @@ void algoritmo4() {
         printf("  Presione Enter para continuar...\n");
         getchar();
     }
+}
+
+/* ============================================================
+   ALGORITMO 5: Aproximaciones Sucesivas (Sec. 3.3.3)
+   Iteracion de valor con factor de descuento alpha.
+
+   PASO 1 (n=1): V_i^1 = optimo_k { C_ik }
+   PASO 2 (n->n+1):
+       V_i^n = optimo_k { C_ik + alpha * sum_j P_ij(k) * V_j^{n-1} }
+   Prueba de optimalidad:
+       Si |V_i^n - V_i^{n-1}| < TOL  para todo i => FINALIZA
+       Si no, regresar al Paso 2.
+   ============================================================ */
+
+void algoritmo5() {
+    system("cls");
+    printf("===== APROXIMACIONES SUCESIVAS (Sec. 3.3.3) =====\n");
+
+    if (!g_capturado) {
+        printf("\n[!] No hay datos cargados.\n");
+        printf("    Ejecute primero la Enumeracion Exhaustiva (opcion 1)\n");
+        printf("    para ingresar las matrices de transicion y costos.\n");
+        return;
+    }
+
+    int numEstados = g_m + 1;
+
+    /* --- Parametros del algoritmo --- */
+    printf("\n============================================================\n");
+    printf("  PARAMETROS DEL ALGORITMO\n");
+    printf("============================================================\n");
+
+    double alpha;
+    int modo;
+    printf("\nDesea ingresar (1) epsilon (tasa de interes) o (2) alpha directamente?: ");
+    scanf("%d", &modo); getchar();
+    if (modo == 1) {
+        double epsilon;
+        printf("Ingrese epsilon (tasa de interes, ej. 0.10 para 10%%): ");
+        epsilon = leerValor();
+        if (epsilon <= -1.0) { printf("[!] Valor invalido. Se usara epsilon=0.\n"); epsilon = 0.0; }
+        alpha = 1.0 / (1.0 + epsilon);
+        printf("=> alpha = 1 / (1 + %.6f) = %.8f\n", epsilon, alpha);
+    } else {
+        printf("Ingrese alpha directamente (0 < alpha < 1, ej. 9/10): ");
+        alpha = leerValor();
+        if (alpha <= 0.0 || alpha >= 1.0) { printf("[!] alpha debe estar en (0,1). Se usara 0.9.\n"); alpha = 0.9; }
+        printf("=> alpha = %.8f\n", alpha);
+    }
+
+    double TOL;
+    printf("\nIngrese la tolerancia TOL (ej. 10 o 0.001): ");
+    TOL = leerValor();
+    if (TOL <= 0.0) { printf("[!] Tolerancia invalida. Se usara TOL=1e-6.\n"); TOL = 1e-6; }
+    printf("=> TOL = %g\n", TOL);
+
+    int maxIter;
+    printf("Ingrese el numero maximo de iteraciones N (ej. 100): ");
+    scanf("%d", &maxIter); getchar();
+    if (maxIter <= 0) { printf("[!] Se usara N=100.\n"); maxIter = 100; }
+
+    printf("\n============================================================\n");
+    printf("  TIPO DE OPTIMIZACION\n");
+    printf("============================================================\n");
+    int objetivo;
+    printf("Desea minimizar (1) o maximizar (2) el costo?: ");
+    scanf("%d", &objetivo); getchar();
+    if (objetivo != 2) objetivo = 1;
+    printf("=> Se %s\n", objetivo == 1 ? "MINIMIZA" : "MAXIMIZA");
+
+    /* ---------------------------------------------------------------
+       PASO 1: n = 1
+       V_i^1 = optimo_k { C_ik }
+       --------------------------------------------------------------- */
+    double Vant[MAX_ESTADOS];   /* V^{n-1} */
+    double Vnew[MAX_ESTADOS];   /* V^{n}   */
+    int    politica[MAX_ESTADOS];
+
+    printf("\n============================================================\n");
+    printf("  PASO 1: n = 1\n");
+    printf("  V_i^1 = %s { C_ik }\n", objetivo == 1 ? "min" : "max");
+    printf("============================================================\n\n");
+
+    for (int i = 0; i < numEstados; i++) {
+        double optVal = (objetivo == 1) ? 1e18 : -1e18;
+        int    optK   = -1;
+
+        printf("  i=%d:  %s { ", i, objetivo == 1 ? "min" : "max");
+        int primero = 1;
+        for (int k = 1; k <= g_k; k++) {
+            if (!g_aplicable[k][i]) continue;
+            if (!primero) printf(", ");
+            printf("C_%d%d=", i, k);
+            imprimirFraccion(g_costos[i][k], 0);
+            primero = 0;
+
+            if ((objetivo == 1 && g_costos[i][k] < optVal - 1e-12) ||
+                (objetivo == 2 && g_costos[i][k] > optVal + 1e-12)) {
+                optVal = g_costos[i][k];
+                optK   = k;
+            }
+        }
+        printf(" } = ");
+        imprimirFraccion(optVal, 0);
+        printf("   => delta_%d = k=%d\n", i, optK);
+
+        Vant[i]     = optVal;
+        politica[i] = optK;
+    }
+
+    printf("\n  Aproximacion inicial de la politica optima: (");
+    for (int i = 0; i < numEstados; i++)
+        printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
+    printf(")\n");
+
+    /* ---------------------------------------------------------------
+       PASO 2: iteraciones n = 2, 3, ...
+       V_i^n = optimo_k { C_ik + alpha * sum_j P_ij(k) * V_j^{n-1} }
+       --------------------------------------------------------------- */
+    int convergio = 0;
+
+    for (int n = 2; n <= maxIter + 1; n++) {
+        printf("\n============================================================\n");
+        printf("  PASO 2: n = %d\n", n);
+        printf("  V_i^%d = %s_k { C_ik + alpha * sum_j P_ij(k)*V_j^%d }\n",
+               n, objetivo == 1 ? "min" : "max", n - 1);
+        printf("============================================================\n\n");
+
+        for (int i = 0; i < numEstados; i++) {
+            printf("  i=%d:\n", i);
+            double optVal = (objetivo == 1) ? 1e18 : -1e18;
+            int    optK   = -1;
+
+            for (int k = 1; k <= g_k; k++) {
+                if (!g_aplicable[k][i]) continue;
+
+                /* Mostrar C_ik + alpha * { suma P_ij * V_j^{n-1} } */
+                printf("    k=%d:  V_%d^%d = C_%d%d + alpha*{ ", k, i, n, i, k);
+                int pt = 1;
+                for (int j = 0; j < numEstados; j++) {
+                    double pij = g_Pdec[k][i][j];
+                    if (fabs(pij) < 1e-12) continue;
+                    if (!pt) printf(" + ");
+                    printf("P_%d%d(%d)(", i, j, k);
+                    imprimirFraccion(pij, 0);
+                    printf(")*V_%d^%d(", j, n - 1);
+                    imprimirFraccion(Vant[j], 0);
+                    printf(")");
+                    pt = 0;
+                }
+                printf(" }\n");
+
+                /* Calcular valor numerico */
+                double suma = 0.0;
+                for (int j = 0; j < numEstados; j++)
+                    suma += g_Pdec[k][i][j] * Vant[j];
+                double val = g_costos[i][k] + alpha * suma;
+
+                printf("           = ");
+                imprimirFraccion(g_costos[i][k], 0);
+                printf(" + ");
+                imprimirFraccion(alpha, 0);
+                printf("*(");
+                imprimirFraccion(suma, 0);
+                printf(") = ");
+                imprimirFraccion(val, 0);
+
+                if ((objetivo == 1 && val < optVal - 1e-12) ||
+                    (objetivo == 2 && val > optVal + 1e-12)) {
+                    optVal = val;
+                    optK   = k;
+                    printf("  <-- %s", objetivo == 1 ? "MINIMO" : "MAXIMO");
+                }
+                printf("\n");
+            }
+
+            Vnew[i]     = optVal;
+            politica[i] = optK;
+            printf("    => V_%d^%d = ", i, n);
+            imprimirFraccion(optVal, 0);
+            printf("   delta_%d = k=%d\n\n", i, optK);
+        }
+
+        /* Politica aproximada de esta iteracion */
+        printf("  Politica Optima Aproximada n=%d: (", n);
+        for (int i = 0; i < numEstados; i++)
+            printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
+        printf(")\n\n");
+
+        /* --- Prueba de optimalidad: |V_i^n - V_i^{n-1}| < TOL para todo i --- */
+        printf("  --- Prueba de Optimalidad: |V_i^%d - V_i^%d| < TOL=%g ---\n",
+               n, n - 1, TOL);
+
+        int todoCumple = 1;
+        for (int i = 0; i < numEstados; i++) {
+            double diff = fabs(Vnew[i] - Vant[i]);
+            printf("    Estado %d:  |%.6f - %.6f| = %.6f  %s TOL  => %s\n",
+                   i, Vnew[i], Vant[i], diff,
+                   diff < TOL ? "<" : ">=",
+                   diff < TOL ? "CUMPLE" : "NO CUMPLE => SE VUELVE A ITERAR");
+            if (diff >= TOL) todoCumple = 0;
+        }
+
+        /* Copiar Vnew -> Vant para la siguiente iteracion */
+        for (int i = 0; i < numEstados; i++) Vant[i] = Vnew[i];
+
+        if (todoCumple) {
+            convergio = 1;
+            printf("\n  => Todos los estados cumplen la prueba. SE FINALIZA.\n");
+            break;
+        }
+
+        if (n <= maxIter) {
+            printf("\n  [Iteracion %d no convergio. Continuando con n=%d...]\n", n, n + 1);
+            printf("  Presione Enter para continuar...\n");
+            getchar();
+        } else {
+            printf("\n  [!] Se alcanzo el maximo de iteraciones (%d) sin convergencia.\n", maxIter);
+        }
+    }
+
+    /* --- Resumen final --- */
+    printf("\n============================================================\n");
+    printf("  RESUMEN FINAL - APROXIMACIONES SUCESIVAS\n");
+    printf("============================================================\n");
+    printf("  alpha  = ");  imprimirFraccion(alpha, 0); printf("\n");
+    printf("  TOL    = %g\n", TOL);
+    if (convergio)
+        printf("  Estado: CONVERGIDO\n\n");
+    else
+        printf("  Estado: NO CONVERGIDO (se agotaron las iteraciones)\n\n");
+
+    printf("  Politica optima aproximada R*: (");
+    for (int i = 0; i < numEstados; i++)
+        printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
+    printf(")\n\n");
+
+    printf("  Valores V_i finales:\n");
+    for (int i = 0; i < numEstados; i++) {
+        printf("    V_%d = ", i);
+        imprimirFraccion(Vant[i], 0);
+        printf("\n");
+    }
+
+    printf("\n  Interpretacion: V_i es el valor presente total del costo\n");
+    printf("  esperado (descontado) partiendo del estado i bajo R*.\n");
+    printf("============================================================\n");
 }
 
 int main() {

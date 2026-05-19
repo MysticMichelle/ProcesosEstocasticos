@@ -278,7 +278,7 @@ void imprimirSistemaEstacionario(int m, double P[MAX_ESTADOS][MAX_ESTADOS], doub
     }
     printf("  ");
     for (int j = 0; j < n; j++) printf("%8.4f ", 1.0);
-    printf("  |  1\n\n  Solucion ? vector estacionario pi:\n");
+    printf("  |  1\n\n  Solucion => vector estacionario pi:\n");
     for (int i = 0; i < n; i++) printf("    pi_%d = %10.6f\n", i, pi[i]);
     printf("\n");
 }
@@ -773,44 +773,17 @@ void algoritmo3() {
 /* ============================================================
    ALGORITMO 4: Mejoramiento de Politicas con Descuento
    (Criterio del valor descontado - seccion 4.3.2)
-
-   Factor de descuento: alpha = 1 / (1 + epsilon)
-   donde epsilon es la tasa de interes.
-
-   Paso 0: Elegir una politica arbitraria inicial R1.
-
-   Paso 1: Determinacion del valor (ecuacion de Bellman con descuento):
-       V_i(Rn) = C_ik + alpha * sum_{j=0}^{m} P_ij(k) * V_j(Rn)
-       para i = 0, 1, ..., m
-       donde k = decision asignada al estado i en la politica Rn.
-
-   Reordenando el sistema lineal:
-       V_i - alpha * sum_j P_ij(k) * V_j = C_ik
-       => (I - alpha * P(Rn)) * V = C(Rn)
-
-   Paso 2: Mejoramiento de la politica:
-       Para cada estado i, encontrar k* que minimice:
-           C_ik + alpha * sum_j P_ij(k) * V_j(Rn)
-
-   Prueba de optimalidad: Si Rn+1 = Rn => Rn es optima.
    ============================================================ */
 
-/* Resuelve el sistema (I - alpha*P(Rn)) * V = C(Rn) por Gauss-Jordan */
 static int resolverSistemaDescuento(int m, int politica[MAX_ESTADOS],
                                     double Pdec[MAX_DECISIONES][MAX_ESTADOS][MAX_ESTADOS],
                                     double costos[MAX_ESTADOS][MAX_DECISIONES],
                                     double alpha,
                                     double V[MAX_ESTADOS]) {
     int n = m + 1;
-    /* Matriz aumentada [A | b] de tamano n x (n+1) */
     static double A[MAX_ESTADOS][MAX_ESTADOS + 1];
     memset(A, 0, sizeof(A));
 
-    /*
-     * Ecuacion i: V_i - alpha * sum_j P_ij(k) * V_j = C_ik
-     * Coeficiente de V_j en la fila i: delta_ij - alpha * P_ij(k)
-     * RHS: C_ik
-     */
     for (int i = 0; i < n; i++) {
         int k = politica[i];
         for (int j = 0; j < n; j++)
@@ -818,7 +791,6 @@ static int resolverSistemaDescuento(int m, int politica[MAX_ESTADOS],
         A[i][n] = costos[i][k];
     }
 
-    /* Gauss-Jordan con pivoteo parcial */
     for (int col = 0; col < n; col++) {
         int pivot = -1; double best = 0.0;
         for (int row = col; row < n; row++)
@@ -855,7 +827,6 @@ void algoritmo4() {
 
     int numEstados = g_m + 1;
 
-    /* ---- Leer factor de descuento ---- */
     printf("\n============================================================\n");
     printf("  FACTOR DE DESCUENTO\n");
     printf("  alpha = 1 / (1 + epsilon)   donde epsilon = tasa de interes\n");
@@ -912,38 +883,71 @@ void algoritmo4() {
         printf("\n========================================\n");
         printf("  ITERACION %d\n", iteracion);
         printf("========================================\n");
-        printf("\n  --- PASO 1: Determinacion del Valor (con descuento alpha=%.6f) ---\n", alpha);
+        printf("\n  --- PASO 1: Determinacion del Valor (con descuento alpha=");
+        imprimirFraccion(alpha, 0);
+        printf(") ---\n");
         printf("  Politica R%d: (", iteracion);
         for (int i = 0; i < numEstados; i++)
             printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
         printf(")\n\n");
 
-        /* Mostrar el sistema de ecuaciones de Bellman con descuento */
+        /* Mostrar ecuacion de Bellman expandida por terminos */
         printf("  Ecuacion de Bellman con descuento:\n");
-        printf("  V_i(R%d) = C_ik + alpha * sum_j P_ij(k) * V_j(R%d)\n\n", iteracion, iteracion);
+        printf("  V_i(R%d) = C_ik + alpha * { sum_j P_ij(k) * V_j(R%d) }\n\n", iteracion, iteracion);
         printf("  Sistema lineal  (I - alpha*P(R%d)) * V = C(R%d):\n\n", iteracion, iteracion);
 
         for (int i = 0; i < numEstados; i++) {
             int k = politica[i];
-            printf("    i=%d [k=%d]:  ", i, k);
-            int primero_term = 1;
+
+            /* --- Mostrar la ecuacion de Bellman expandida (forma original) --- */
+            printf("    i=%d [k=%d]:  V_%d = ", i, k, i);
+            imprimirFraccion(g_costos[i][k], 0);
+            printf(" + ");
+            imprimirFraccion(alpha, 0);
+            printf(" * { ");
+            for (int j = 0; j < numEstados; j++) {
+                if (j > 0) printf(" + ");
+                printf("P_%d%d(%d)*V_%d", i, j, k, j);
+            }
+            printf(" }\n");
+
+            /* Sustituir los valores de P conocidos */
+            printf("          V_%d = ", i);
+            imprimirFraccion(g_costos[i][k], 0);
+            printf(" + ");
+            imprimirFraccion(alpha, 0);
+            printf(" * { ");
+            int primero_t = 1;
+            for (int j = 0; j < numEstados; j++) {
+                double pij = g_Pdec[k][i][j];
+                if (fabs(pij) < 1e-12) continue;
+                if (!primero_t) printf(" + ");
+                imprimirFraccion(pij, 0);
+                printf("*V_%d", j);
+                primero_t = 0;
+            }
+            printf(" }\n");
+
+            /* Mostrar la ecuacion reordenada (forma del sistema lineal) */
+            printf("          ");
+            int primero_eq = 1;
             for (int j = 0; j < numEstados; j++) {
                 double coef = (i == j ? 1.0 : 0.0) - alpha * g_Pdec[k][i][j];
                 if (fabs(coef) < 1e-12) continue;
-                if (!primero_term) {
+                if (!primero_eq) {
                     if (coef > 0) printf(" + ");
                     else          printf(" - ");
                     imprimirFraccion(fabs(coef), 0);
                 } else {
-                    if (coef < 0) printf("-");
-                    imprimirFraccion(fabs(coef), 0);
-                    primero_term = 0;
+                    if (coef < 0) { printf("-"); imprimirFraccion(fabs(coef), 0); }
+                    else            imprimirFraccion(coef, 0);
+                    primero_eq = 0;
                 }
                 printf("*V_%d", j);
             }
             printf("  =  ");
             imprimirFraccion(g_costos[i][k], 0);
-            printf("  [C_%d%d]\n", i, k);
+            printf("   [Ec. %d]\n\n", i + 1);
         }
 
         /* Resolver el sistema */
@@ -953,7 +957,7 @@ void algoritmo4() {
             break;
         }
 
-        printf("\n  Valores V_i(R%d) resueltos:\n", iteracion);
+        printf("  Valores V_i(R%d) resueltos:\n", iteracion);
         for (int i = 0; i < numEstados; i++) {
             printf("    V_%d = ", i);
             imprimirFraccion(V[i], 0);
@@ -969,36 +973,75 @@ void algoritmo4() {
         int cambio = 0;
 
         for (int i = 0; i < numEstados; i++) {
-            printf("  Estado i=%d:\n", i);
-            double mejorVal = 1e18;
-            int    mejorK   = -1;
+            /* Contar decisiones aplicables */
+            int num_aplic = 0;
+            for (int k = 1; k <= g_k; k++) if (g_aplicable[k][i]) num_aplic++;
 
-            for (int k = 1; k <= g_k; k++) {
-                if (!g_aplicable[k][i]) continue;
-
-                /* Calcular C_ik + alpha * sum_j P_ij(k) * V_j */
-                double val = g_costos[i][k];
-                for (int j = 0; j < numEstados; j++)
-                    val += alpha * g_Pdec[k][i][j] * V[j];
-
-                printf("    k=%d:  C[%d][%d] + alpha*sum_j P[%d][j](k=%d)*V_j = %.6f + %.6f = ",
-                       k, i, k, i, k, g_costos[i][k], val - g_costos[i][k]);
-                imprimirFraccion(val, 0);
-
-                if (val < mejorVal - 1e-9) {
-                    mejorVal = val;
-                    mejorK   = k;
-                    printf("  <-- minimo");
+            if (num_aplic == 1) {
+                /* Decision unica: mostrar como en el PDF */
+                for (int k = 1; k <= g_k; k++) {
+                    if (!g_aplicable[k][i]) continue;
+                    double val = g_costos[i][k];
+                    for (int j = 0; j < numEstados; j++)
+                        val += alpha * g_Pdec[k][i][j] * V[j];
+                    printf("  i=%d  Decision Unica\n", i);
+                    printf("    k=%d:  V_%d = ", k, i);
+                    imprimirFraccion(val, 0);
+                    printf("  * MINIMO  =>  d_%d(R%d) = %d\n", i, iteracion + 1, k);
+                    nuevaPolitica[i] = k;
                 }
-                printf("\n");
+            } else {
+                printf("  i=%d:\n", i);
+                double mejorVal = 1e18;
+                int    mejorK   = -1;
+
+                for (int k = 1; k <= g_k; k++) {
+                    if (!g_aplicable[k][i]) continue;
+
+                    /* Mostrar la forma expandida: C_ik + alpha*{suma} */
+                    printf("    k=%d:  V_%d = C_%d%d + ", k, i, i, k);
+                    imprimirFraccion(alpha, 0);
+                    printf(" * { ");
+                    int pt = 1;
+                    for (int j = 0; j < numEstados; j++) {
+                        double pij = g_Pdec[k][i][j];
+                        if (fabs(pij) < 1e-12) continue;
+                        if (!pt) printf(" + ");
+                        printf("P_%d%d(%d)(", i, j, k);
+                        imprimirFraccion(pij, 0);
+                        printf(")*V_%d(", j);
+                        imprimirFraccion(V[j], 0);
+                        printf(")");
+                        pt = 0;
+                    }
+                    printf(" }\n");
+
+                    /* Calcular el valor numerico */
+                    double val = g_costos[i][k];
+                    for (int j = 0; j < numEstados; j++)
+                        val += alpha * g_Pdec[k][i][j] * V[j];
+
+                    printf("          V_%d = ", i);
+                    imprimirFraccion(g_costos[i][k], 0);
+                    printf(" + ");
+                    imprimirFraccion(val - g_costos[i][k], 0);
+                    printf(" = ");
+                    imprimirFraccion(val, 0);
+
+                    if (val < mejorVal - 1e-9) {
+                        mejorVal = val;
+                        mejorK   = k;
+                        printf("  * MINIMO");
+                    }
+                    printf("\n");
+                }
+                nuevaPolitica[i] = mejorK;
+                printf("    => d_%d(R%d) = k=%d\n", i, iteracion + 1, mejorK);
             }
-            nuevaPolitica[i] = mejorK;
-            printf("    => d_%d(R%d) = k=%d  [V_i nuevo = ", i, iteracion + 1, mejorK);
-            imprimirFraccion(mejorVal, 0);
-            printf("]\n");
+            printf("\n");
         }
 
-        printf("\n  Nueva politica R%d: (", iteracion + 1);
+        printf("  Nueva politica R%d: (", iteracion + 1);
         for (int i = 0; i < numEstados; i++)
             printf("%d%s", nuevaPolitica[i], i < numEstados - 1 ? "," : "");
         printf(")\n");
@@ -1014,7 +1057,9 @@ void algoritmo4() {
                    iteracion + 1, iteracion);
             printf("  ========================================\n");
             printf("\n  RESUMEN FINAL:\n");
-            printf("    alpha  = %.8f\n", alpha);
+            printf("    alpha  = ");
+            imprimirFraccion(alpha, 0);
+            printf("\n");
             printf("    Politica optima: R*(");
             for (int i = 0; i < numEstados; i++)
                 printf("%d%s", politica[i], i < numEstados - 1 ? "," : "");
@@ -1030,7 +1075,6 @@ void algoritmo4() {
             break;
         }
 
-        /* Continuar con la nueva politica */
         for (int i = 0; i < numEstados; i++)
             politica[i] = nuevaPolitica[i];
         iteracion++;
